@@ -195,7 +195,7 @@ var runner = function(req, res) {
             
             try{
                 if(run = ActionMap[key]){
-                    debugger;
+                    //debugger;
                     run();
                 }
             }catch(e){
@@ -260,7 +260,18 @@ var Monitor = {
          * @param key {String}  监视对像的名称. 
          */
         removeVisible:function(key){
-            delete VisibleMap[key];
+            if(key instanceof RegExp){
+                var keys = Object.keys(VisibleMap);
+                var k = null;
+                for(var index in keys){
+                    k = keys[index];
+                    if(key.test(k)){
+                        delete VisibleMap[k];
+                    }
+                }
+            }else{
+                delete VisibleMap[key];
+            }
         },
         
         /**
@@ -279,7 +290,18 @@ var Monitor = {
          * @param key
          */
         removeAction:function(key){
-            delete ActionMap[key];
+            if(key instanceof RegExp){
+                var keys = Object.keys(ActionMap);
+                var k = null;
+                for(var index in keys){
+                    k = keys[index];
+                    if(key.test(k)){
+                        delete ActionMap[k];
+                    }
+                }
+            }else{
+                delete ActionMap[key];
+            }
         },
         selfService:function(port){
             
@@ -312,7 +334,16 @@ GLOBAL.Monitor = Monitor;
     
     var PORT = 8080;
     
-    Monitor.setVisible('Random',function(){
+    Monitor.setVisible('Random1',function(){
+        return ~~(Math.random() * 100);
+    });
+    Monitor.setVisible('Random2',function(){
+        return ~~(Math.random() * 100);
+    });
+    Monitor.setVisible('Random3',function(){
+        return ~~(Math.random() * 100);
+    });
+    Monitor.setVisible('Random4',function(){
         return ~~(Math.random() * 100);
     });
     
@@ -333,6 +364,12 @@ GLOBAL.Monitor = Monitor;
         Monitor.setVisible('htmlTemplate',function(){
             return template;
         });
+    });
+    
+    
+    Monitor.addAction('cleanVisible',function(){
+        debugger;
+        Monitor.removeVisible(/^Random.*/i);
     });
     
     Monitor.addAction('testFun',function(){
@@ -377,6 +414,6 @@ GLOBAL.Monitor = Monitor;
         
     });
 
-}) //();
+}) ();
 
 
