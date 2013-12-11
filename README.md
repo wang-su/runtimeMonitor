@@ -29,16 +29,14 @@
         console.log('Server Listening on ' + PORT);
     });
 
-    globalServer.on('request', runner);
-
     globalServer.on('request', function(req,res){
-        // 处理标记，如果为true，则表示已被我的代码处理了，你们就不要再对这个访问进行处理了。
-        if(res.wlock){
-           return;
-        }
-        // 你可以继续你的http请求处理
-        res.writeHead(404);
-        res.end("no content");
+        if(GLOBAL.Monitor && Monitor.canBeHandle(url)){
+            Monitor.execute(req,res);
+        }else {
+    		// 你可以继续你的http请求处理
+            res.writeHead(404);
+            res.end("no content");
+    	};
     });
     
 另外一个方式是用在你在开发一个模块时，如下：
