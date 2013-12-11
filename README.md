@@ -30,6 +30,7 @@
     });
 
     globalServer.on('request', function(req,res){
+        var url = req.url;
         if(GLOBAL.Monitor && Monitor.canBeHandle(url)){
             Monitor.execute(req,res);
         }else {
