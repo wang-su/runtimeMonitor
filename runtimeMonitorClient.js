@@ -46,7 +46,7 @@ var toCommandPage = function(){
     var content = '',value;
     for(var key in Command){
         value = Command[key];
-        content += '<a href="' + commandUrl + value +  '">' + value + '</a>';
+        content += '<a href="' + commandUrl + encodeURI(value) +  '">' + value + '</a>';
     }
     document.getElementById('commands').innerHTML = content;
     return content;

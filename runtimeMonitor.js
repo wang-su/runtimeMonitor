@@ -119,8 +119,9 @@ var template = '<!DOCTYPE html>' +
                 '<meta name="apple-mobile-web-app-capable" content="yes">' +
                 '<title>Clouda Runtime Monitor</title>' +
                 '<style type="text/css"> pre{ width: 95%; height:80px; border:1px solid #ccc; word-wrap: break-word; word-break: normal; overflow: auto; } '+
-                '#commands{  }'+
-                'a{ display:inline-block; width:100px; height:30px; background:#eee; border:3px solid #ccc; border-radius:10px; padding:10px; margin:10px; text-align:center; text-decoration:none; line-height:30px; } ' +
+                '#commands{transition-duration:700ms; opacity:0.7; position: fixed; bottom: 30px; background: #f0f0f0; right: -250px; top: 0px; width: 330px; height:100%; overflow: auto;}'+
+                '#commands:hover{right: 5px; opacity:1;}'+
+                'a{ display:inline-block; min-width:100px; min-height:30px; background:#eee; border:3px solid #ccc; border-radius:10px; padding:10px; margin:10px; text-align:center; text-decoration:none; line-height:30px; } ' +
                 'a:hover{border:#AAA 3px solid; background:#fff;}</style>' +
                 '<script type="text/javascript" src="/$_prefix_$/js"></script>' +
                 '</head><body>' +
@@ -190,7 +191,8 @@ var runner = function(req, res) {
             
             break;
         case "command":
-            var key = part[1];
+            //debugger;
+            var key = decodeURI(part[1]);
             var run = null;
             
             try{
@@ -414,6 +416,6 @@ GLOBAL.Monitor = Monitor;
         
     });
 
-}) ();
+});//();
 
 
