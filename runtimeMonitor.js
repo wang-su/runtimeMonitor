@@ -205,7 +205,7 @@ var runner = function(req, res) {
                 res.end("error:%s",e.stack);
             }
             res.setHeader('Cache-Control','no-cache');
-            res.writeHead(301, {'Location' : "/" + prefix + "/"});
+            res.writeHead(204);
             res.end("");
             break;
         default:
