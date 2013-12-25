@@ -44,6 +44,7 @@ var makeAjaxButton = function(root){
                         me.style.background = '';
                         me.runing = 0;
                     }
+                    setTimeout(queryData,100);
                 };
                 xhr.open('GET', this.href, true);
                 xhr.send('');

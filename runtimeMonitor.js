@@ -13,6 +13,10 @@ var http = require("http");
 var fs = require("fs");
 var EventEmitter = require('events').EventEmitter;
 var prefix = 'smr_monitor';
+
+//绑定assert到全局空间
+GLOBAL.assert = require('assert');
+
 var reg_path =  new RegExp('^/' +prefix + "/(.*)$",'i');
 
 var VisibleMap = {}, ActionMap = {};
@@ -23,6 +27,17 @@ var randomStr = function(len){
         str += (~~(Math.random() * 36)).toString(36);
     return str;
 };
+
+var lineComment = /\s*\/\/.*$/gm;
+var multiLineComment = /\s*\/\*(?:.|\n)*?\*\/\s*/igm;
+/**
+ * 用于过滤载入代码的注释.
+ */
+var removeComment = function(code){
+  return code.replace(lineComment,"").replace(multiLineComment , "");
+};
+
+
 /**
  * 维持状态的http session.
  * 用于进行登陆等认证处理. 
@@ -79,6 +94,216 @@ var Session = (function(){
     };
 })();
 
+
+var getUTRunner = function(path){
+    
+    var stepName = "loading";
+    
+    // 每个测试的上下文空间,用于绑定一些值或流程控制方法.
+    var context = {};
+    
+    var before, after, beforeAll, afterAll, runList, runItem , afterError;
+    var testIndex = 0;
+    
+    // 这是一个delay对像
+    var executeCode = {
+            /**
+             * 
+             * 用于解析载入的ut文件的内容,并获得待测试的业务内容的执行范围
+             * 正常情况下,直接使用如下格式的functin即可以满足执行要求
+             * 
+             *       Q.getRunner("unit.js").parse = function(code,context){
+             *          return eval(code);
+             *       }
+             * 
+             * @param code 
+             *      已经处理过的代码的字符串表示.
+             * @param context
+             *      一个引用的上下文对像,在将在ut的执行代码中绑定一些值等.是一个辅助对像.每个ut使用一个.
+             *      在parse的时候,可以用于放置一些初始化的对像和值等.如果改变方法的参数名称,则在ut.js中使用时,也要随之更改.
+             *      并且在测试的过程中, 测试的调度代码也会向上面写入一些相关的信息.
+             */
+            parse:function(code,context){throw new Error('can not get the object');},
+            /**
+             * 如果发生执行错误时触发的事件.
+             * @param error {Error} 
+             *      所发生的错误对像内容.
+             * @param path {String}
+             *      发生错误时所执行的文件路径
+             */
+            onerror:null,
+            /**
+             * 测试内容载入完成时执行一次
+             */
+            onload:null,
+            /**
+             * 全部执行完成,或被完全终止
+             * @param context
+             *      整个执行过程中的上下文对像.
+             */
+            oncomplete:null,
+            /**
+             * 重新跑一次测试.
+             */
+            reTest:function(){
+                // 还原三个状态
+                testIndex = 0;
+                stepName = 'loading';
+                runItem = runList[testIndex];
+                
+                context['next']();
+            }
+    };
+    
+    var logErr = function(err){
+        console.error("failed : on Step [" + stepName + "] File [" + path + "],  Error stack : \n" + (err.stack || err));
+    };
+    
+    var processError = function(err , funStr){
+     // 如果有事件则通知,否则打印到console中.
+        executeCode.onerror ? executeCode.onerror(err, path, context ,testIndex , funStr) : logErr(err);
+        if(afterError){
+            try{
+                /**
+                 * 在不是faile的情况下,当afterError返回true,则认为是致命错误.
+                 */
+                if(afterError != context.faile && afterError(err , testIndex , funStr)){
+                    context.faile();
+                }else{
+                    context.next();
+                }
+            }catch(e){
+                // 这里不应该再有错误,如果有,log出来,然后吞掉..
+                console.error(e.stack || e);
+            }
+        }
+    }
+    
+
+
+    var runTest = function(){
+        
+        runItem = runList[testIndex];
+        
+        // 在这里绑定控制方法,是为了不被用户的parse影响.
+        /**
+         * 
+         *  执行下一个测试单元
+         *  
+         */
+        context['next'] = function(){
+            
+            debugger;
+            if(stepName == 'failed'){
+                executeCode.oncomplete && process.nextTick(executeCode.oncomplete.bind(executeCode,context));
+                return;
+            }else if(stepName == 'run'){
+                after && after();   // 这里的after其实是上一个runItem的after;
+            }
+            
+            stepName = 'run';
+            
+            if(runItem){
+                before && before();
+                process.nextTick(function(runItem){
+                    try{
+                        runItem();
+                    }catch(err){
+                        processError(err, runItem.toString());
+                    }
+                }.bind(null,runItem));
+                runItem = runList[ ++ testIndex ];
+            }else{
+                stepName = 'afterAll';
+                afterAll && afterAll();
+                context.exitCode = 0;
+                executeCode.oncomplete && process.nextTick(executeCode.oncomplete.bind(executeCode,context));
+            }
+        };
+        
+
+        if(stepName == 'loading'){
+            stepName = 'beforeAll';
+            beforeAll && beforeAll();
+        }
+        
+        if(runItem){
+            context['next'] ();
+        }
+        
+    };
+    
+    //这个异步是必须的,用于构建一个delay对像;
+    fs.readFile(path,{encoding:'utf8'},function(err,data){
+        
+        if(err){
+            executeCode.onerror ? executeCode.onerror(err, path, context , testIndex) : logErr(err);
+            return;
+        }
+        
+        // 释放IO.保证onload先去执行;
+        process.nextTick(function(){
+            
+            var realData = "(" + removeComment(data) + ")()";
+            
+            var runner = {};
+            
+            try{
+                runner = executeCode.parse(realData,context);
+            }catch(e){
+                executeCode.onerror ? executeCode.onerror( e , path, context , testIndex) :  logErr(err);
+                return;
+            }
+            
+            /**
+             * 
+             * 停止执行继续,并认为余下所有的都将失败
+             * 
+             */
+            context['faile'] = function(){
+                stepName = 'failed';
+                context.exitCode = 1;
+                this.next();
+            };
+            
+            before = runner.before || false;
+            beforeAll = runner.beforeAll || false;
+            after = runner.after || false;
+            afterAll = runner.afterAll || false;
+            runList = Array.isArray(runner.run) ? runner.run : [runner.run];
+            
+            // 如果不指明错误的处理方法,则认为所有的错误都将是中断性的致命错误.
+            afterError = runner.afterError || context.faile;
+            
+            try{
+                runTest();
+            }catch(err){
+                processError(err);
+                
+                // 如果有事件则通知,否则打印到console中.
+//                executeCode.onerror ? executeCode.onerror(err, path, context) : logErr(err);
+//                if(afterError){
+//                    try{
+//                        /**
+//                         * 在不是faile的情况下,当afterError返回true,则认为是致命错误.
+//                         */
+//                        if(afterError != context.faile && afterError()){
+//                            context.faile();
+//                        }
+//                    }catch(e){
+//                        // 这里不应该再有错误,如果有,log出来,然后吞掉..
+//                        console.error(e.stack || e);
+//                    }
+//                }
+            }
+        });
+        
+        executeCode.onload && executeCode.onload(context);
+        
+        
+    });
+    return executeCode;
+};
 
 var toWatchPageData = function(){
     
@@ -216,7 +441,7 @@ var runner = function(req, res) {
     }
 };
 
-
+var globalServer = false;
 var Monitor = {
         canBeHandle:canBeHandle,
         setPrefix:function(_prefix){
@@ -307,8 +532,12 @@ var Monitor = {
         },
         selfService:function(port){
             
+            if(globalServer){
+                return;
+            }
+            
             port = port || '8088';
-            var globalServer = http.createServer();
+            globalServer = http.createServer();
             
             globalServer.listen(port, function() {
                 console.log('Runtime Monitor Listening on ' + port);
@@ -323,7 +552,8 @@ var Monitor = {
                 res.writeHead(404);
                 res.end("no content");
             });
-        }
+        },
+        getUT:getUTRunner
 };
 
 module.exports = Monitor;
