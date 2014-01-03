@@ -1,6 +1,6 @@
 {
   "name": "runtime-monitor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "This is A DevTools For NodeJs.",
   "main": "runtimeMonitor.js",
   "homepage": "https://github.com/wang-su/runtimeMonitor",
